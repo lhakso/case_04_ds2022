@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Mapping
+from typing import Any, Dict, Mapping, Iterator
 
 DATA_DIR = Path(__file__).parent / "data"
 DEFAULT_DATA_FILE = DATA_DIR / "survey.ndjson"
@@ -16,3 +16,16 @@ def append_record(record: Mapping[str, Any], file_path: Path | str = DEFAULT_DAT
     with target_path.open("a", encoding="utf-8") as handle:
         json.dump(record, handle, ensure_ascii=False)
         handle.write("\n")
+
+
+def iter_records(file_path: Path | str = DEFAULT_DATA_FILE) -> Iterator[Dict[str, Any]]:
+    target_path = Path(file_path)
+    if not target_path.exists():
+        return iter(())
+    def _gen() -> Iterator[Dict[str, Any]]:
+        with target_path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                yield json.loads(line)
+    return _gen()

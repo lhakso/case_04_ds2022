@@ -49,12 +49,13 @@ def test_submit_valid_payload_persists_hashed_data(client):
         "rating": 5,
         "comments": "Great!",
         "user_agent": "frontend-test",
+        "source": "web",
     }
 
     response = client.post("/v1/survey", json=payload)
     assert response.status_code == 201
     body = response.get_json()
-    assert body["status"] == "accepted"
+    assert body["status"] == "ok"
     assert len(body["submission_id"]) == 64
     assert response.headers["Access-Control-Allow-Origin"] == "*"
 
@@ -70,6 +71,7 @@ def test_submit_valid_payload_persists_hashed_data(client):
     assert record["consent"] is True
     assert record["rating"] == payload["rating"]
     assert record["comments"] == payload["comments"]
+    assert record["source"] == payload["source"]
     assert record["user_agent"] == payload["user_agent"]
     assert record["email"] == hash_text(payload["email"].lower())
     assert record["age"] == hash_text(str(payload["age"]))
@@ -86,6 +88,7 @@ def test_submit_uses_supplied_submission_id(client):
         "rating": 4,
         "comments": "",
         "submission_id": "custom-id-123",
+        "source": "mobile",
     }
 
     response = client.post("/v1/survey", json=payload)
@@ -97,6 +100,7 @@ def test_submit_uses_supplied_submission_id(client):
     assert record["submission_id"] == "custom-id-123"
     assert record["email"] == hash_text(payload["email"].lower())
     assert record["age"] == hash_text(str(payload["age"]))
+    assert record["source"] == payload["source"]
 
 
 def test_submit_rejects_invalid_payload(client):
@@ -113,6 +117,43 @@ def test_submit_rejects_invalid_payload(client):
     body = response.get_json()
     assert body["error"] == "validation_error"
     assert any(item["loc"][-1] == "email" for item in body["details"])
+
+
+def test_consent_must_be_true(client):
+    response = client.post(
+        "/v1/survey",
+        json={
+            "name": "Ava",
+            "email": "ava@example.com",
+            "age": 22,
+            "consent": False,
+            "rating": 5,
+        },
+    )
+    assert response.status_code == 422
+    details = response.get_json()["details"]
+    assert any(item["loc"][-1] == "consent" for item in details)
+
+
+def test_dedupe_by_submission_id(client):
+    data_file = Path(client.application.config["SURVEY_DATA_FILE"])
+    payload = {
+        "name": "Ava",
+        "email": "ava@example.com",
+        "age": 22,
+        "consent": True,
+        "rating": 5,
+        "comments": "Great!",
+        "submission_id": "same-id",
+        "source": "web",
+    }
+    r1 = client.post("/v1/survey", json=payload)
+    assert r1.status_code == 201
+    r2 = client.post("/v1/survey", json=payload)
+    assert r2.status_code == 201
+
+    records = list(load_records(data_file))
+    assert len(records) == 1
 
 
 def test_submit_with_non_json_body_returns_error(client):
