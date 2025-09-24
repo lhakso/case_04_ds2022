@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Survey Intake</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <header class="page-header">
+    <h1>Customer Satisfaction Survey</h1>
+    <p class="subtitle">We appreciate your feedback. Please complete the form below.</p>
+  </header>
+
+  <main>
+    <section class="card" aria-live="polite">
+      <form id="survey-form" novalidate>
+        <div class="field">
+          <label for="name">Full Name<span aria-hidden="true">*</span></label>
+          <input type="text" id="name" name="name" required maxlength="100" autocomplete="name"
+            placeholder="Ada Lovelace">
+          <p class="hint">Required.</p>
+        </div>
+
+        <div class="field">
+          <label for="email">Email<span aria-hidden="true">*</span></label>
+          <input type="email" id="email" name="email" required autocomplete="email" placeholder="ada@example.com">
+          <p class="hint">Your email is hashed before it is stored.</p>
+        </div>
+
+        <div class="field">
+          <label for="age">Age<span aria-hidden="true">*</span></label>
+          <input type="number" id="age" name="age" required min="0" max="130" inputmode="numeric" placeholder="29">
+          <p class="hint">Stored as a secure hash.</p>
+        </div>
+
+        <fieldset class="field">
+          <legend>Consent<span aria-hidden="true">*</span></legend>
+          <div class="option">
+            <input type="radio" id="consent-yes" name="consent" value="true" required>
+            <label for="consent-yes">I agree to the data usage policy.</label>
+          </div>
+          <div class="option">
+            <input type="radio" id="consent-no" name="consent" value="false">
+            <label for="consent-no">I do not agree.</label>
+          </div>
+        </fieldset>
+
+        <div class="field">
+          <label for="rating">Overall Rating (1-5)<span aria-hidden="true">*</span></label>
+          <select id="rating" name="rating" required>
+            <option value="" disabled selected hidden>Select a rating</option>
+            <option value="1">1 - Very dissatisfied</option>
+            <option value="2">2 - Dissatisfied</option>
+            <option value="3">3 - Neutral</option>
+            <option value="4">4 - Satisfied</option>
+            <option value="5">5 - Very satisfied</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="comments">Comments</label>
+          <textarea id="comments" name="comments" rows="4" maxlength="500"
+            placeholder="What worked well? What can we improve?"></textarea>
+          <p class="hint">Optional.</p>
+        </div>
+
+        <div class="field">
+          <label for="submission_id">Submission ID</label>
+          <input type="text" id="submission_id" name="submission_id" maxlength="64"
+            placeholder="Optional custom identifier">
+          <p class="hint">Leave blank to let the server generate one.</p>
+        </div>
+
+        <div class="actions">
+          <button type="submit">Submit Survey</button>
+          <button type="reset" class="secondary">Reset</button>
+        </div>
+      </form>
+
+      <output id="form-status" class="status" role="status" aria-live="polite"></output>
+    </section>
+  </main>
+
+  <footer class="page-footer">
+    <p>Thank you for helping us improve our services.</p>
+  </footer>
+
+  <script>
+    const API_URL = "http://127.0.0.1:5000/v1/survey";
+
+    function serializeForm(form) {
+      const data = new FormData(form);
+      const payload = {};
+
+      data.forEach((value, key) => {
+        if (value === "") {
+          return;
+        }
+        if (key === "age") {
+          payload[key] = Number(value);
+          return;
+        }
+        if (key === "consent") {
+          payload[key] = value === "true";
+          return;
+        }
+        if (key === "rating") {
+          payload[key] = Number(value);
+          return;
+        }
+        payload[key] = value;
+      });
+
+      return payload;
+    }
+
+    async function submitSurvey(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const statusEl = document.getElementById("form-status");
+      statusEl.textContent = "Submitting...";
+      statusEl.className = "status info";
+
+      if (!form.reportValidity()) {
+        statusEl.textContent = "Please fix the highlighted fields.";
+        statusEl.className = "status error";
+        return;
+      }
+
+      const payload = serializeForm(form);
+      const endpoint = API_URL;
+
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        const body = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          const message = body.message || body.error || "Submission failed.";
+          statusEl.textContent = message;
+          statusEl.className = "status error";
+          return;
+        }
+
+        const submissionId = body.submission_id || "(not provided)";
+        statusEl.textContent = `Thank you! Submission ID: ${submissionId}`;
+        statusEl.className = "status success";
+        form.reset();
+      } catch (error) {
+        statusEl.textContent = "Network error. Please try again.";
+        statusEl.className = "status error";
+        console.error("Survey submission failed", error);
+      }
+    }
+
+    document.getElementById("survey-form").addEventListener("submit", submitSurvey);
+  </script>
+</body>
+
+</html>
